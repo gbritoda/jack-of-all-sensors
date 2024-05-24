@@ -1,4 +1,5 @@
-// sudo chmod a+rw /dev/ttyACM0
+#include <MFRC522.h>
+#include <SPI.h>
 #include <LiquidCrystal.h>
 
 
@@ -11,16 +12,21 @@
 
 #define VRX_PIN A0
 #define VRY_PIN A1
-#define JOY_SW_PIN 53
+#define JOY_SW_PIN 34
+
+#define RFID_SS_PIN 53
+#define RFID_RST_PIN 48
 
 #define DELAY_BETWEEN_INPUTS_MS 300
 
 #define SONAR_MAX_DIST 1500
 
+
 char *menuOptions[] = {"Sonar","NFC", "Radio", "Other"};
 const int numOpts = 4;
 int currentMenuSelection = 0;
 
+MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);
 LiquidCrystal lcd(22,23,24,25,26,27,28,29,30,31,32);
 
 
@@ -119,14 +125,53 @@ void enterSelectedMode() {
         case 0:
             runSonarMode();
             break;
+        case 1:
+            runRFIDMode();
+            break;
         // default:
         //     goHome();
     }
 }
 
+void runRFIDMode() {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("NFC Mode");
+
+  Serial.println("Place your RFID card near the reader...");
+
+    while (true) {
+        if (mfrc522.PICC_IsNewCardPresent()) {
+            clearLcdRow(1);
+            mfrc522.PICC_ReadCardSerial();
+            // Print card UID
+            Serial.print(mfrc522.uid.size);
+            for (byte i = 0; i < mfrc522.uid.size; i++) {
+                lcd.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+                lcd.print(mfrc522.uid.uidByte[i], HEX);
+            }
+            while (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+                // Do nothing and wait for the card to be removed
+                delay(100);  // Small delay to avoid overwhelming the loop
+            }
+            mfrc522.PICC_HaltA();
+            mfrc522.PCD_StopCrypto1();
+
+        } else {
+            clearLcdRow(1);
+            lcd.print("Nothing detected");
+        }
+        delay(300);
+    }
+}
 
 void setup() {
-    // Serial.begin(115200); // For debug purposes
+    Serial.begin(9600); // For debug purposes
+    
+    // RFID Reader
+    SPI.begin();
+    mfrc522.PCD_Init();
+    
     // Clear ultrasonic sensor pins
     pinMode(TRIG_PIN, OUTPUT);
     pinMode(ECHO_PIN, INPUT);
