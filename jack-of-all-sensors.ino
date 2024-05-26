@@ -2,7 +2,8 @@
 
 #include "ultrasonic_sensor.h"
 #include "rfid.h"
-#include "lcd.h"
+#include "lcd_screen.h"
+#include "tft_screen.h"
 
 #define RGB0_R_PIN 6
 #define RGB0_G_PIN 5
@@ -15,6 +16,13 @@
 #define DELAY_BETWEEN_INPUTS_MS 300
 
 #define SONAR_MAX_DIST 1500
+
+// SPI pins, more for my sanity (values for Arduino Mega 2560 Rev3)
+#define SPI_CS   53
+#define SPI_SCLK 52 // SCK, SCLK
+#define SPI_MOSI 51 // COPI, SDA
+#define SPI_MISO 50 // CIPO
+
 
 enum ScreenContext {
     CTX_HOME_SCREEN,
@@ -47,18 +55,17 @@ void setRgb0Colour(int redValue, int greenValue, int blueValue) {
 
 
 void displayHomeSelectionMenu(int selectedOpt = 0) {
-    lcd.clear();
+    tftScreen.background(0,0,0);
     for (int i=0; i < numOpts; i++) {
+        int h = (TFT_DEFAULT_CHAR_H*(i+1)); //char height * selection
         if (i == selectedOpt) {
-            lcd.setCursor(0,0);
-            lcd.print("> ");
-            lcd.print(menuOptions[i]);
-            
-            if (i+1 < numOpts) {
-                lcd.setCursor(0,1);
-                lcd.print("  ");
-                lcd.print(menuOptions[i+1]);
-            }
+            char selected_str[15] = ">";
+            strcat(selected_str, menuOptions[i]);
+            tftScreen.text(selected_str, 0, h);
+        } else {
+            char unselected_str[15] = " ";
+            strcat(unselected_str, menuOptions[i]);
+            tftScreen.text(unselected_str, 0, h);
         }
     }
 }
@@ -77,24 +84,33 @@ void enterSelectedMode(int selectedOpt) {
 
 
 void runSonarMode() {
-    writeToLcd("Distance (cm):", 0, 0);
-    clearLcdRow(1);
     context = CTX_SONAR_MODE;
+    lcdScreen.clear();
+    writeToLcd("Sonar Mode", 0, 0);
+    clearTFTScreen();
 
+    int distance = averageDistanceFromSonar(10);
+    int lastDistance = -1;
     while (true) {
-        int distance = averageDistanceFromSonar();
-        clearLcdRow(1);
+        distance = averageDistanceFromSonar(10);
         if (distance >= SONAR_MAX_DIST) {
             // Red
             setRgb0Colour(100, 0, 0);
-            lcd.print("Out of reach");
+            clearTFTScreen();
+            tftScreen.stroke(0,0,100); // For some reason red and blue are swapped?
+            tftScreen.text("Out of Reach!", 0, tftScreen.height()/3);
         } else {
             // Green
             setRgb0Colour(0, 100, 0);
-            lcd.print("    ");
-            lcd.print(distance);
-            lcd.print("cm");
-            lcd.print("    ");
+            if (distance != lastDistance) {
+                clearTFTScreen();
+                tftScreen.stroke(0, 142, 0);
+                char cstr[16];
+                // FIXME: add "cm" and increase font size and do some nice drawings
+                itoa(distance, cstr, 10);
+                tftScreen.text(cstr, 0, tftScreen.height()/3);
+            }
+            lastDistance = distance;
         }
     }
 }
@@ -102,8 +118,8 @@ void runSonarMode() {
 
 void runRFIDMode() {
     context = CTX_RFID_MODE;
-    lcd.clear();
-    lcd.setCursor(0,0);
+    lcdScreen.clear();
+    lcdScreen.setCursor(0,0);
     bool rfidModeRead = true;
 
     while (true) {
@@ -116,7 +132,6 @@ void runRFIDMode() {
 
         if (joySwitchPressed() == true) {
             rfidModeRead = !rfidModeRead;
-            delay(200);
         }
 
         delay(100);
@@ -126,7 +141,7 @@ void runRFIDMode() {
 
 
 void RFIDModeReadUID() {
-    lcd.clear();
+    lcdScreen.clear();
     writeToLcd("RFID UID:", 0,0);
     if (rfid_reader.PICC_IsNewCardPresent()) {
         setRgb0Colour(100, 75, 0);
@@ -136,7 +151,7 @@ void RFIDModeReadUID() {
         // card UID
         byte* uidBytes = readCardUID();
         for (byte i=0; i<rfid_reader.uid.size; i++) {
-            lcd.print(uidBytes[i], HEX);
+            lcdScreen.print(uidBytes[i], HEX);
         }
 
         while (rfid_reader.PICC_IsNewCardPresent()) {
@@ -149,14 +164,14 @@ void RFIDModeReadUID() {
     } else {
         setRgb0Colour(0, 100, 0);
         clearLcdRow(1);
-        lcd.print("Nothing detected");
+        lcdScreen.print("Nothing detected");
     }
     delay(100);
 }
 
 
 void RFIDModeWriteUid() {
-    lcd.clear();
+    lcdScreen.clear();
     writeToLcd("Write new UID:",0,0);
     writeToLcd("MAINTENANCE",0,1);
     // setRgb0Colour(100, 100, 0);
@@ -213,25 +228,34 @@ void setup() {
     pinMode(JOY_SW_PIN, INPUT_PULLUP);
 
     setRgb0Colour(0, 0, 100);
+
     // Initialise LCD
-    lcd.begin(16, 2);
+    lcdScreen.begin(16, 2);
+
+    // Init TFT screen
+    tftScreen.begin();
+    setDefaultTFTScheme();
+    displayHomeSelectionMenu(currentMenuSelection);
 }
 
 
 void loop() {
     context = CTX_HOME_SCREEN;
+    writeToLcd("Jack Of All Sensors", 0, 0);
+    writeToLcd("Select Functionality", 1, 0);
     int xValue = analogRead(VRX_PIN);
     int yValue = analogRead(VRY_PIN);
 
     if (yValue >= 900 && currentMenuSelection < numOpts-1) {
         currentMenuSelection++;
         delay(DELAY_BETWEEN_INPUTS_MS);
+        displayHomeSelectionMenu(currentMenuSelection);
     } else if (yValue <= 100 && currentMenuSelection > 0) {
         currentMenuSelection--;
         delay(DELAY_BETWEEN_INPUTS_MS);
+        displayHomeSelectionMenu(currentMenuSelection);
     }
 
-    displayHomeSelectionMenu(currentMenuSelection);
     if (joySwitchPressed() == true) {
         enterSelectedMode(currentMenuSelection);
     }
