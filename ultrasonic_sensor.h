@@ -1,5 +1,5 @@
-#define TRIG_PIN 2
-#define ECHO_PIN 3
+#define TRIG_PIN 7
+#define ECHO_PIN 8
 
 int measureDistanceFromSonar();
 
