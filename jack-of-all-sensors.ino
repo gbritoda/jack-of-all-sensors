@@ -18,7 +18,7 @@
 #define SONAR_MAX_DIST 1500
 
 // SPI pins, more for my sanity (values for Arduino Mega 2560 Rev3)
-#define SPI_CS   53
+#define SPI_CS   53 // SS
 #define SPI_SCLK 52 // SCK, SCLK
 #define SPI_MOSI 51 // COPI, SDA
 #define SPI_MISO 50 // CIPO
@@ -31,7 +31,6 @@ enum ScreenContext {
 };
 
 struct {
-    unsigned int n;
     unsigned int redVal;
     unsigned int greenVal;
     unsigned int blueVal;
@@ -88,6 +87,9 @@ void runSonarMode() {
     lcdScreen.clear();
     writeToLcd("Sonar Mode", 0, 0);
     clearTFTScreen();
+    tftScreen.text("Sonar Mode",0,0);
+    tftScreen.circle(tftScreen.width()*8/9, TFT_DEFAULT_CHAR_H/2, TFT_DEFAULT_CHAR_H/2);
+    tftScreen.line(tftScreen.width()*8/9, TFT_DEFAULT_CHAR_H/2, (tftScreen.width()*8/9)+sqrt(2),0);
 
     int distance = averageDistanceFromSonar(10);
     int lastDistance = -1;
@@ -96,19 +98,23 @@ void runSonarMode() {
         if (distance >= SONAR_MAX_DIST) {
             // Red
             setRgb0Colour(100, 0, 0);
-            clearTFTScreen();
-            tftScreen.stroke(0,0,100); // For some reason red and blue are swapped?
-            tftScreen.text("Out of Reach!", 0, tftScreen.height()/3);
+            clearTFTScreenBelow(0, tftScreen.height()/2);
+            tftScreen.stroke(TFT_RED);
+            tftScreen.text("Out of Reach!", 0, tftScreen.height()/2);
         } else {
             // Green
             setRgb0Colour(0, 100, 0);
             if (distance != lastDistance) {
-                clearTFTScreen();
-                tftScreen.stroke(0, 142, 0);
-                char cstr[16];
-                // FIXME: add "cm" and increase font size and do some nice drawings
-                itoa(distance, cstr, 10);
-                tftScreen.text(cstr, 0, tftScreen.height()/3);
+                // clearTFTScreen();
+                // Clear below the area the text is being written
+                clearTFTScreenBelow(0, tftScreen.height()/2);
+                tftScreen.setTextSize(TFT_CHAR_MULT+1);
+                tftScreen.stroke(TFT_GREEN);
+                char dist_str[16];
+                itoa(distance, dist_str, 10);
+                strcat(dist_str, " cm");
+                tftScreen.text(dist_str, 0, tftScreen.height()/2);
+                setDefaultTFTScheme();
             }
             lastDistance = distance;
         }
@@ -219,7 +225,6 @@ void setup() {
     pinMode(ECHO_PIN, INPUT);
 
     // Defining RGB0
-    rgb0.n = 0;
     pinMode(RGB0_R_PIN, OUTPUT);
     pinMode(RGB0_G_PIN, OUTPUT);
     pinMode(RGB0_B_PIN, OUTPUT);
@@ -235,14 +240,15 @@ void setup() {
     // Init TFT screen
     tftScreen.begin();
     setDefaultTFTScheme();
+    clearTFTScreen();
     displayHomeSelectionMenu(currentMenuSelection);
 }
 
 
 void loop() {
     context = CTX_HOME_SCREEN;
-    writeToLcd("Jack Of All Sensors", 0, 0);
-    writeToLcd("Select Functionality", 1, 0);
+    writeToLcd("Welcome 2 Jack ", 0, 0);
+    writeToLcd("of All Sensors!", 0, 1);
     int xValue = analogRead(VRX_PIN);
     int yValue = analogRead(VRY_PIN);
 

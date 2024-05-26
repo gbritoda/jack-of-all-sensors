@@ -11,9 +11,17 @@
 
 #define TFT_CHAR_MULT 2
 #define TFT_DEFAULT_CHAR_H TFT_CHAR_MULT*TFT_CHAR_H
+#define TFT_DEFAULT_CHAR_W TFT_CHAR_MULT*TFT_CHAR_W
+
+// For TFT the colours are in BGR due to internal wiring
+// Maybe I should change these variables to be BGR_COLOUR
+#define TFT_GREEN 0, 142, 0
+#define TFT_RED 0, 0, 142
 
 TFT tftScreen = TFT(TFT_CS, TFT_A0, TFT_RST);
 
 void setDefaultTFTScheme();
 
 void clearTFTScreen();
+
+void clearTFTScreenBelow(uint16_t x, uint16_t y);
