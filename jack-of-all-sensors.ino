@@ -4,6 +4,8 @@
 #include "rfid.h"
 #include "tft_screen.h"
 
+// #define SILENT_MODE
+
 #define RGB0_R_PIN 6
 #define RGB0_G_PIN 5
 #define RGB0_B_PIN 4
@@ -18,6 +20,8 @@
 #define JOY_SW_PIN 9
 
 #define RETURN_BUTTON_PIN 22
+
+#define BUZZER_PIN 23
 
 #define DELAY_BETWEEN_INPUTS_MS 300
 
@@ -107,6 +111,7 @@ void runSonarMode() {
             lastDistance = distance;
         }
     }
+    playReturnBeep();
 }
 
 void runRFIDMode() {
@@ -120,6 +125,7 @@ void runRFIDMode() {
         refreshScreen = false;
         delay(200);
     }
+    playReturnBeep();
 }
 
 
@@ -178,6 +184,34 @@ bool returnButtonRisingEdge() {
     return detectRisingEdge(RETURN_BUTTON_PIN);
 }
 
+/**
+ * @brief Plays a sound in the buzzer
+ * 
+ * @param f Frequency of the tone
+ * @param duration Time to play the tone in miliseconds
+ */
+void playSound(int f, int duration) {
+    #ifndef SILENT_MODE
+    tone(BUZZER_PIN, f);
+    delay(duration);
+    noTone(BUZZER_PIN);
+    #endif
+}
+
+void playFalloutTheme() {
+    // Intro theme C D# E
+    playSound(523, 1000);
+    playSound(622, 2000);
+    playSound(659, 2000);
+}
+
+void playConfirmationBeep() {
+    playSound(700, 200);
+}
+
+void playReturnBeep() {
+    playSound(500, 200);
+}
 
 void setup() {
     Serial.begin(115200); // For debug purposes
@@ -195,6 +229,9 @@ void setup() {
     // Return button -> Unpressed = HIGH
     pinMode(RETURN_BUTTON_PIN, INPUT);
 
+    // Buzzer
+    pinMode(BUZZER_PIN, OUTPUT);
+
     // Defining RGB0
     pinMode(RGB0_R_PIN, OUTPUT);
     pinMode(RGB0_G_PIN, OUTPUT);
@@ -209,6 +246,8 @@ void setup() {
     tftScreen.begin();
     setDefaultTFTScheme();
     clearTFTScreen();
+    // Why not. Adds an extra 5 seconds to the boot up though, will change it to a simple beep when I get bored of it
+    playFalloutTheme();
     tftScreen.println("    Jack of");
     tftScreen.println(" All Sensors");
     displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);
@@ -219,7 +258,6 @@ void loop() {
     context = CTX_HOME_SCREEN;
     int xValue = analogRead(VRX_PIN);
     int yValue = analogRead(VRY_PIN);
-    
 
     if (yValue >= 900 && currentMenuSelection < numOpts-1) {
         currentMenuSelection++;
@@ -232,6 +270,7 @@ void loop() {
     }
 
     if (joySwitchRisingEdge() == true) {
+        playSound(700, 200);
         enterSelectedMode(currentMenuSelection);
         // If this function returns we get back to the main screen
         clearTFTScreen();
