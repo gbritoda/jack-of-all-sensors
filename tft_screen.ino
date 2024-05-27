@@ -17,6 +17,23 @@ void clearTFTScreenBelow(uint16_t x, uint16_t y) {
 }
 
 
+void displayHomeSelectionMenu(int selectedOpt, char* menuOptions[], int numOpts) {
+    clearTFTScreenBelow(0, 2*TFT_DEFAULT_CHAR_H);
+    setDefaultTFTScheme();
+    for (int i=0; i < numOpts; i++) {
+        int h = (TFT_DEFAULT_CHAR_H*(i+1)); //char height * selection
+        if (i == selectedOpt) {
+            char selected_str[15] = ">";
+            strcat(selected_str, menuOptions[i]);
+            tftScreen.println(selected_str);
+        } else {
+            char unselected_str[15] = " ";
+            strcat(unselected_str, menuOptions[i]);
+            tftScreen.println(unselected_str);
+        }
+    }
+}
+
 
 /* RFID Specific screens */
 void displayRFIDReadMode(bool cardDetected, byte* uidBytes, int uidBytesSize, bool refreshScreen) {

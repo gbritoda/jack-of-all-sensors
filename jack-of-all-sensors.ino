@@ -8,6 +8,11 @@
 #define RGB0_G_PIN 5
 #define RGB0_B_PIN 4
 
+#define RGB_YELLOW 150, 100, 0
+#define RGB_BLUE 0, 0, 100
+#define RGB_RED 100, 0, 0
+#define RGB_GREEN 0, 100, 0
+
 #define VRX_PIN A0
 #define VRY_PIN A1
 #define JOY_SW_PIN 9
@@ -37,6 +42,7 @@ struct {
 
 
 ScreenContext context;
+
 char *menuOptions[] = {"Sonar","RFID"};
 const int numOpts = 2;
 volatile int currentMenuSelection = 0;
@@ -49,26 +55,6 @@ void setRgb0Colour(int redValue, int greenValue, int blueValue) {
     rgb0.redVal = redValue;
     rgb0.greenVal = greenValue;
     rgb0.blueVal = blueValue;
-}
-
-
-void displayHomeSelectionMenu(int selectedOpt = 0) {
-    clearTFTScreen();
-    setDefaultTFTScheme();
-    tftScreen.println("    Jack of");
-    tftScreen.println(" All Sensors");
-    for (int i=0; i < numOpts; i++) {
-        int h = (TFT_DEFAULT_CHAR_H*(i+1)); //char height * selection
-        if (i == selectedOpt) {
-            char selected_str[15] = ">";
-            strcat(selected_str, menuOptions[i]);
-            tftScreen.println(selected_str);
-        } else {
-            char unselected_str[15] = " ";
-            strcat(unselected_str, menuOptions[i]);
-            tftScreen.println(unselected_str);
-        }
-    }
 }
 
 
@@ -124,29 +110,12 @@ void runSonarMode() {
 void runRFIDMode() {
     context = CTX_RFID_MODE;
     clearTFTScreen();
-    bool rfidModeRead = true;
     bool readModeCardDetected = false;
     bool refreshScreen = true;
     setRgb0Colour(150, 100, 0);
     while (true) {
-
-        if (rfidModeRead == true) {
-            readModeCardDetected = RFIDModeReadUID(readModeCardDetected, refreshScreen);
-            refreshScreen = false;
-        } else {
-            // RFIDModeWriteUid();
-            if (refreshScreen) {
-                clearTFTScreen();
-                tftScreen.println("RFID Write under maintenance");
-                refreshScreen=false;
-            }
-        }
-
-        if (joySwitchPressed() == true) {
-            rfidModeRead = !rfidModeRead;
-            refreshScreen = true;
-        }
-
+        readModeCardDetected = RFIDModeReadUID(readModeCardDetected, refreshScreen);
+        refreshScreen = false;
         delay(200);
     }
 }
@@ -156,7 +125,9 @@ void runRFIDMode() {
 so we don't have to constantly print out the message in case it doesn't change state. */
 bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
     if (rfidReader.PICC_IsNewCardPresent()) {
-        setRgb0Colour(0, 100, 0);
+        // TODO: Next step for this would be to pause and wait for the card to be removed
+        // This way there's no flickering
+        setRgb0Colour(RGB_GREEN);
         
         rfidReader.PICC_ReadCardSerial();
 
@@ -166,7 +137,7 @@ bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
         readCardUID(uidBytes, uidBytesSize);
         displayRFIDReadMode(true, uidBytes, uidBytesSize, refreshScreen);
 
-        while (rfidReader.PICC_IsNewCardPresent()) {
+        while (rfidReader.PICC_IsNewCardPresent() || rfidReader.PICC_ReadCardSerial()) {
             // Do nothing and wait for the card to be removed
             delay(300);  // Small delay to avoid overwhelming the loop
         }
@@ -175,36 +146,15 @@ bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
         return true;
     } else {
         if (cardDetectedPreviously || refreshScreen) {
-            setRgb0Colour(100, 100, 0);
+            setRgb0Colour(RGB_YELLOW);
             displayRFIDReadMode(false, nullptr, 0, refreshScreen);
         }
         return false;
     }
 }
 
-
-// void RFIDModeWriteUid() {
-    // lcdScreen.clear();
-    // writeToLcd("Write new UID:",0,0);
-    // writeToLcd("MAINTENANCE",0,1);
-    // setRgb0Colour(100, 100, 0);
-    // // Set new UID
-    // byte newUid[] = {0xDE, 0xAD, 0xBE, 0xEF};
-    // if ( rfid_reader.MIFARE_SetUid(newUid, (byte)4, true) ) {
-    //     writeToLcd("Written.", 0, 0);
-    //     setRgb0Colour(0, 100, 0);
-    // }
-    
-    // // Halt PICC and re-select it so DumpToSerial doesn't get confused
-    // rfid_reader.PICC_HaltA();
-    // if ( ! rfid_reader.PICC_IsNewCardPresent() || ! rfid_reader.PICC_ReadCardSerial() ) {
-    //     return;
-    // }
-// }
-
-
 // Triggers a press on the rising edge (Joystick switch unpressed is HIGH)
-bool joySwitchPressed() {
+bool joySwitchRisingEdge() {
     if (digitalRead(JOY_SW_PIN) == LOW) {
         delay(50);
         // Wait for High
@@ -212,6 +162,13 @@ bool joySwitchPressed() {
         while (digitalRead(JOY_SW_PIN) != HIGH) {
             delay(50);
         }
+        return true;
+    }
+    return false;
+}
+
+bool joySwitchLow() {
+    if (digitalRead(JOY_SW_PIN) == LOW) {
         return true;
     }
     return false;
@@ -245,7 +202,9 @@ void setup() {
     tftScreen.begin();
     setDefaultTFTScheme();
     clearTFTScreen();
-    displayHomeSelectionMenu(currentMenuSelection);
+    tftScreen.println("    Jack of");
+    tftScreen.println(" All Sensors");
+    displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);
 }
 
 
@@ -257,14 +216,14 @@ void loop() {
     if (yValue >= 900 && currentMenuSelection < numOpts-1) {
         currentMenuSelection++;
         delay(DELAY_BETWEEN_INPUTS_MS);
-        displayHomeSelectionMenu(currentMenuSelection);
+        displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);
     } else if (yValue <= 100 && currentMenuSelection > 0) {
         currentMenuSelection--;
         delay(DELAY_BETWEEN_INPUTS_MS);
-        displayHomeSelectionMenu(currentMenuSelection);
+        displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);
     }
 
-    if (joySwitchPressed() == true) {
+    if (joySwitchRisingEdge() == true) {
         enterSelectedMode(currentMenuSelection);
     }
 
