@@ -2,7 +2,6 @@
 
 #include "ultrasonic_sensor.h"
 #include "rfid.h"
-#include "lcd_screen.h"
 #include "tft_screen.h"
 
 #define RGB0_R_PIN 6
@@ -54,17 +53,20 @@ void setRgb0Colour(int redValue, int greenValue, int blueValue) {
 
 
 void displayHomeSelectionMenu(int selectedOpt = 0) {
-    tftScreen.background(0,0,0);
+    clearTFTScreen();
+    setDefaultTFTScheme();
+    tftScreen.println("    Jack of");
+    tftScreen.println(" All Sensors");
     for (int i=0; i < numOpts; i++) {
         int h = (TFT_DEFAULT_CHAR_H*(i+1)); //char height * selection
         if (i == selectedOpt) {
             char selected_str[15] = ">";
             strcat(selected_str, menuOptions[i]);
-            tftScreen.text(selected_str, 0, h);
+            tftScreen.println(selected_str);
         } else {
             char unselected_str[15] = " ";
             strcat(unselected_str, menuOptions[i]);
-            tftScreen.text(unselected_str, 0, h);
+            tftScreen.println(unselected_str);
         }
     }
 }
@@ -84,8 +86,6 @@ void enterSelectedMode(int selectedOpt) {
 
 void runSonarMode() {
     context = CTX_SONAR_MODE;
-    lcdScreen.clear();
-    writeToLcd("Sonar Mode", 0, 0);
     clearTFTScreen();
     tftScreen.text("Sonar Mode",0,0);
     tftScreen.circle(tftScreen.width()*8/9, TFT_DEFAULT_CHAR_H/2, TFT_DEFAULT_CHAR_H/2);
@@ -121,65 +121,72 @@ void runSonarMode() {
     }
 }
 
-
 void runRFIDMode() {
     context = CTX_RFID_MODE;
-    lcdScreen.clear();
-    lcdScreen.setCursor(0,0);
+    clearTFTScreen();
     bool rfidModeRead = true;
-
+    bool readModeCardDetected = false;
+    bool refreshScreen = true;
+    setRgb0Colour(150, 100, 0);
     while (true) {
 
         if (rfidModeRead == true) {
-            RFIDModeReadUID();
+            readModeCardDetected = RFIDModeReadUID(readModeCardDetected, refreshScreen);
+            refreshScreen = false;
         } else {
-            RFIDModeWriteUid();
+            // RFIDModeWriteUid();
+            if (refreshScreen) {
+                clearTFTScreen();
+                tftScreen.println("RFID Write under maintenance");
+                refreshScreen=false;
+            }
         }
 
         if (joySwitchPressed() == true) {
             rfidModeRead = !rfidModeRead;
+            refreshScreen = true;
         }
 
-        delay(100);
+        delay(200);
     }
 }
 
 
-
-void RFIDModeReadUID() {
-    lcdScreen.clear();
-    writeToLcd("RFID UID:", 0,0);
-    if (rfid_reader.PICC_IsNewCardPresent()) {
-        setRgb0Colour(100, 75, 0);
-        clearLcdRow(1);
-        rfid_reader.PICC_ReadCardSerial();
+/* Returns true if there was a card, False if not. Also takes a parameter of last state 
+so we don't have to constantly print out the message in case it doesn't change state. */
+bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
+    if (rfidReader.PICC_IsNewCardPresent()) {
+        setRgb0Colour(0, 100, 0);
+        
+        rfidReader.PICC_ReadCardSerial();
 
         // card UID
-        byte* uidBytes = readCardUID();
-        for (byte i=0; i<rfid_reader.uid.size; i++) {
-            lcdScreen.print(uidBytes[i], HEX);
-        }
+        byte uidBytes[10];
+        int uidBytesSize = rfidReader.uid.size;
+        readCardUID(uidBytes, uidBytesSize);
+        displayRFIDReadMode(true, uidBytes, uidBytesSize, refreshScreen);
 
-        while (rfid_reader.PICC_IsNewCardPresent()) {
+        while (rfidReader.PICC_IsNewCardPresent()) {
             // Do nothing and wait for the card to be removed
-            delay(100);  // Small delay to avoid overwhelming the loop
+            delay(300);  // Small delay to avoid overwhelming the loop
         }
-        rfid_reader.PICC_HaltA();
-        rfid_reader.PCD_StopCrypto1();
-
+        rfidReader.PICC_HaltA();
+        rfidReader.PCD_StopCrypto1();
+        return true;
     } else {
-        setRgb0Colour(0, 100, 0);
-        clearLcdRow(1);
-        lcdScreen.print("Nothing detected");
+        if (cardDetectedPreviously || refreshScreen) {
+            setRgb0Colour(100, 100, 0);
+            displayRFIDReadMode(false, nullptr, 0, refreshScreen);
+        }
+        return false;
     }
-    delay(100);
 }
 
 
-void RFIDModeWriteUid() {
-    lcdScreen.clear();
-    writeToLcd("Write new UID:",0,0);
-    writeToLcd("MAINTENANCE",0,1);
+// void RFIDModeWriteUid() {
+    // lcdScreen.clear();
+    // writeToLcd("Write new UID:",0,0);
+    // writeToLcd("MAINTENANCE",0,1);
     // setRgb0Colour(100, 100, 0);
     // // Set new UID
     // byte newUid[] = {0xDE, 0xAD, 0xBE, 0xEF};
@@ -193,7 +200,7 @@ void RFIDModeWriteUid() {
     // if ( ! rfid_reader.PICC_IsNewCardPresent() || ! rfid_reader.PICC_ReadCardSerial() ) {
     //     return;
     // }
-}
+// }
 
 
 // Triggers a press on the rising edge (Joystick switch unpressed is HIGH)
@@ -218,7 +225,7 @@ void setup() {
 
     // RFID Reader
     SPI.begin();
-    rfid_reader.PCD_Init();
+    rfidReader.PCD_Init();
 
     // Clear ultrasonic sensor pins
     pinMode(TRIG_PIN, OUTPUT);
@@ -234,9 +241,6 @@ void setup() {
 
     setRgb0Colour(0, 0, 100);
 
-    // Initialise LCD
-    lcdScreen.begin(16, 2);
-
     // Init TFT screen
     tftScreen.begin();
     setDefaultTFTScheme();
@@ -247,8 +251,6 @@ void setup() {
 
 void loop() {
     context = CTX_HOME_SCREEN;
-    writeToLcd("Welcome 2 Jack ", 0, 0);
-    writeToLcd("of All Sensors!", 0, 1);
     int xValue = analogRead(VRX_PIN);
     int yValue = analogRead(VRY_PIN);
 
