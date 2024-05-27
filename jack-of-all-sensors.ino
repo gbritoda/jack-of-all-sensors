@@ -17,6 +17,8 @@
 #define VRY_PIN A1
 #define JOY_SW_PIN 9
 
+#define RETURN_BUTTON_PIN 22
+
 #define DELAY_BETWEEN_INPUTS_MS 300
 
 #define SONAR_MAX_DIST 1500
@@ -79,7 +81,7 @@ void runSonarMode() {
 
     int distance = averageDistanceFromSonar(10);
     int lastDistance = -1;
-    while (true) {
+    while (!returnButtonRisingEdge()) {
         distance = averageDistanceFromSonar(10);
         if (distance >= SONAR_MAX_DIST) {
             // Red
@@ -113,7 +115,7 @@ void runRFIDMode() {
     bool readModeCardDetected = false;
     bool refreshScreen = true;
     setRgb0Colour(150, 100, 0);
-    while (true) {
+    while (!returnButtonRisingEdge()) {
         readModeCardDetected = RFIDModeReadUID(readModeCardDetected, refreshScreen);
         refreshScreen = false;
         delay(200);
@@ -154,12 +156,13 @@ bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
 }
 
 // Triggers a press on the rising edge (Joystick switch unpressed is HIGH)
-bool joySwitchRisingEdge() {
-    if (digitalRead(JOY_SW_PIN) == LOW) {
+
+bool detectRisingEdge(int pin) {
+    if (digitalRead(pin) == LOW) {
         delay(50);
         // Wait for High
         // FIXME: Possibly a timeout?
-        while (digitalRead(JOY_SW_PIN) != HIGH) {
+        while (digitalRead(pin) != HIGH) {
             delay(50);
         }
         return true;
@@ -167,11 +170,12 @@ bool joySwitchRisingEdge() {
     return false;
 }
 
-bool joySwitchLow() {
-    if (digitalRead(JOY_SW_PIN) == LOW) {
-        return true;
-    }
-    return false;
+bool joySwitchRisingEdge() {
+    return detectRisingEdge(JOY_SW_PIN);
+}
+
+bool returnButtonRisingEdge() {
+    return detectRisingEdge(RETURN_BUTTON_PIN);
 }
 
 
@@ -184,9 +188,12 @@ void setup() {
     SPI.begin();
     rfidReader.PCD_Init();
 
-    // Clear ultrasonic sensor pins
+    // Ultrasonic sensor pins
     pinMode(TRIG_PIN, OUTPUT);
     pinMode(ECHO_PIN, INPUT);
+
+    // Return button -> Unpressed = HIGH
+    pinMode(RETURN_BUTTON_PIN, INPUT);
 
     // Defining RGB0
     pinMode(RGB0_R_PIN, OUTPUT);
@@ -212,6 +219,7 @@ void loop() {
     context = CTX_HOME_SCREEN;
     int xValue = analogRead(VRX_PIN);
     int yValue = analogRead(VRY_PIN);
+    
 
     if (yValue >= 900 && currentMenuSelection < numOpts-1) {
         currentMenuSelection++;
@@ -225,6 +233,11 @@ void loop() {
 
     if (joySwitchRisingEdge() == true) {
         enterSelectedMode(currentMenuSelection);
+        // If this function returns we get back to the main screen
+        clearTFTScreen();
+        tftScreen.println("    Jack of");
+        tftScreen.println(" All Sensors");
+        displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);
     }
 
     delay(100);
