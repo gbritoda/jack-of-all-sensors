@@ -4,6 +4,7 @@
 #include "rfid.h"
 #include "tft_screen.h"
 #include "gyroscope.h"
+#include "temp_sensor.h"
 
 #define SILENT_MODE
 
@@ -50,8 +51,8 @@ struct {
 
 ScreenContext context;
 
-char *menuOptions[] = {"Sonar","RFID","Gyro"};
-const int numOpts = 3;
+char *menuOptions[] = {"Sonar","RFID","Gyro", "Temp&Humidity"};
+const int numOpts = 4;
 volatile int currentMenuSelection = 0;
 
 
@@ -75,6 +76,9 @@ void enterSelectedMode(int selectedOpt) {
             break;
         case 2:
             runGyroscopeMode();
+            break;
+        case 3:
+            runTempHumidityMode();
             break;
     }
 }
@@ -133,6 +137,7 @@ void runRFIDMode() {
 }
 
 void runGyroscopeMode() {
+    setupGyro();
     while (!returnButtonRisingEdge()) {
         clearTFTScreen();
         gyroscope.read();
@@ -148,6 +153,22 @@ void runGyroscopeMode() {
     }
     playReturnBeep();
 
+}
+
+void runTempHumidityMode() {
+    while (!returnButtonRisingEdge()) {
+        clearTFTScreen();
+        dht11_sensor.read11(DHT11_PIN);
+        tftScreen.println("Humidity: ");
+        tftScreen.print(dht11_sensor.humidity);
+        tftScreen.println("%");
+        
+        tftScreen.println("Temp:");
+        tftScreen.print(dht11_sensor.temperature);
+        tftScreen.println("degC");
+        delay(200);
+    }
+    playReturnBeep();
 }
 
 
@@ -262,6 +283,8 @@ void setup() {
     // JoyStick button is pressed when input is LOW
     pinMode(JOY_SW_PIN, INPUT_PULLUP);
 
+    pinMode(DHT11_PIN, INPUT);
+
     setRgb0Colour(RGB_GREEN);
 
     // Init TFT screen
@@ -273,7 +296,6 @@ void setup() {
     tftScreen.println("    Jack of");
     tftScreen.println(" All Sensors");
     displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);
-    setupGyro();
 }
 
 
@@ -281,7 +303,6 @@ void loop() {
     context = CTX_HOME_SCREEN;
     int xValue = analogRead(VRX_PIN);
     int yValue = analogRead(VRY_PIN);
-
 
     if (yValue >= 900 && currentMenuSelection < numOpts-1) {
         currentMenuSelection++;
