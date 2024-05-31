@@ -3,8 +3,9 @@
 #include "ultrasonic_sensor.h"
 #include "rfid.h"
 #include "tft_screen.h"
+#include "gyroscope.h"
 
-// #define SILENT_MODE
+#define SILENT_MODE
 
 #define RGB0_R_PIN 6
 #define RGB0_G_PIN 5
@@ -49,8 +50,8 @@ struct {
 
 ScreenContext context;
 
-char *menuOptions[] = {"Sonar","RFID"};
-const int numOpts = 2;
+char *menuOptions[] = {"Sonar","RFID","Gyro"};
+const int numOpts = 3;
 volatile int currentMenuSelection = 0;
 
 
@@ -71,6 +72,9 @@ void enterSelectedMode(int selectedOpt) {
             break;
         case 1:
             runRFIDMode();
+            break;
+        case 2:
+            runGyroscopeMode();
             break;
     }
 }
@@ -128,6 +132,24 @@ void runRFIDMode() {
     playReturnBeep();
 }
 
+void runGyroscopeMode() {
+    while (!returnButtonRisingEdge()) {
+        clearTFTScreen();
+        gyroscope.read();
+        tftScreen.println("Acceleration");
+        tftScreen.println(gyroscope.getAccelX());
+        tftScreen.println(gyroscope.getAccelY());
+        tftScreen.println(gyroscope.getAccelZ());
+        tftScreen.println("Angle");
+        tftScreen.println(gyroscope.getAngleX());
+        tftScreen.println(gyroscope.getAngleY());
+        tftScreen.println(gyroscope.getAngleZ());
+        delay(200);
+    }
+    playReturnBeep();
+
+}
+
 
 /* Returns true if there was a card, False if not. Also takes a parameter of last state 
 so we don't have to constantly print out the message in case it doesn't change state. */
@@ -153,7 +175,7 @@ bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
         rfidReader.PCD_StopCrypto1();
         return true;
     } else {
-        if (cardDetectedPreviously || refreshScreen) {
+        if (cardDetectedPreviously) {
             setRgb0Colour(RGB_YELLOW);
             displayRFIDReadMode(false, nullptr, 0, refreshScreen);
         }
@@ -240,7 +262,7 @@ void setup() {
     // JoyStick button is pressed when input is LOW
     pinMode(JOY_SW_PIN, INPUT_PULLUP);
 
-    setRgb0Colour(0, 0, 100);
+    setRgb0Colour(RGB_GREEN);
 
     // Init TFT screen
     tftScreen.begin();
@@ -251,6 +273,7 @@ void setup() {
     tftScreen.println("    Jack of");
     tftScreen.println(" All Sensors");
     displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);
+    setupGyro();
 }
 
 
@@ -258,6 +281,7 @@ void loop() {
     context = CTX_HOME_SCREEN;
     int xValue = analogRead(VRX_PIN);
     int yValue = analogRead(VRY_PIN);
+
 
     if (yValue >= 900 && currentMenuSelection < numOpts-1) {
         currentMenuSelection++;
@@ -273,6 +297,7 @@ void loop() {
         playSound(700, 200);
         enterSelectedMode(currentMenuSelection);
         // If this function returns we get back to the main screen
+        setRgb0Colour(RGB_GREEN);
         clearTFTScreen();
         tftScreen.println("    Jack of");
         tftScreen.println(" All Sensors");
