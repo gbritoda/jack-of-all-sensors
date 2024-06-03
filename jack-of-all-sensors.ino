@@ -268,6 +268,8 @@ void setup() {
     // Ultrasonic sensor pins
     pinMode(TRIG_PIN, OUTPUT);
     pinMode(ECHO_PIN, INPUT);
+    pinMode(SONAR_VCC_PIN, OUTPUT);
+    digitalWrite(SONAR_VCC_PIN, HIGH);
 
     // Return button -> Unpressed = HIGH
     pinMode(RETURN_BUTTON_PIN, INPUT);

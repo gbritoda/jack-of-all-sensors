@@ -2,9 +2,9 @@
 #include <TFT.h>
 #include <SPI.h>
 
-#define TFT_CS 12
-#define TFT_A0 11
-#define TFT_RST 10
+#define TFT_CS 7
+#define TFT_A0 9
+#define TFT_RST 8
 
 #define TFT_CHAR_H 8
 #define TFT_CHAR_W 5
