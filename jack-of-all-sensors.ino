@@ -5,8 +5,10 @@
 #include "tft_screen.h"
 #include "gyroscope.h"
 #include "temp_sensor.h"
+#include "buzzer.h"
 
 #define SILENT_MODE
+#define DEBUG_MODE
 
 #define RGB0_R_PIN 6
 #define RGB0_G_PIN 5
@@ -19,11 +21,9 @@
 
 #define VRX_PIN A0
 #define VRY_PIN A1
-#define JOY_SW_PIN 9
+#define JOY_SW_PIN 10
 
 #define RETURN_BUTTON_PIN 22
-
-#define BUZZER_PIN 23
 
 #define DELAY_BETWEEN_INPUTS_MS 300
 
@@ -54,7 +54,6 @@ ScreenContext context;
 char *menuOptions[] = {"Sonar","RFID","Gyro", "Temp&Humidity"};
 const int numOpts = 4;
 volatile int currentMenuSelection = 0;
-
 
 void setRgb0Colour(int redValue, int greenValue, int blueValue) {
     analogWrite(RGB0_R_PIN, redValue);
@@ -91,10 +90,10 @@ void runSonarMode() {
     tftScreen.circle(tftScreen.width()*8/9, TFT_DEFAULT_CHAR_H/2, TFT_DEFAULT_CHAR_H/2);
     tftScreen.line(tftScreen.width()*8/9, TFT_DEFAULT_CHAR_H/2, (tftScreen.width()*8/9)+sqrt(2),0);
 
-    int distance = averageDistanceFromSonar(10);
+    int distance = averageDistanceFromSonar(5);
     int lastDistance = -1;
     while (!returnButtonRisingEdge()) {
-        distance = averageDistanceFromSonar(10);
+        distance = averageDistanceFromSonar(5);
         if (distance >= SONAR_MAX_DIST) {
             // Red
             setRgb0Colour(100, 0, 0);
@@ -116,8 +115,9 @@ void runSonarMode() {
                 tftScreen.text(dist_str, 0, tftScreen.height()/2);
                 setDefaultTFTScheme();
             }
-            lastDistance = distance;
         }
+        lastDistance = distance;
+        delay(100);
     }
     playReturnBeep();
 }
@@ -196,7 +196,7 @@ bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
         rfidReader.PCD_StopCrypto1();
         return true;
     } else {
-        if (cardDetectedPreviously) {
+        if (cardDetectedPreviously || refreshScreen) {
             setRgb0Colour(RGB_YELLOW);
             displayRFIDReadMode(false, nullptr, 0, refreshScreen);
         }
@@ -204,19 +204,44 @@ bool RFIDModeReadUID(bool cardDetectedPreviously, bool refreshScreen) {
     }
 }
 
-// Triggers a press on the rising edge (Joystick switch unpressed is HIGH)
 
-bool detectRisingEdge(int pin) {
-    if (digitalRead(pin) == LOW) {
+bool detectEdge(int pin, bool rising) {
+    int max_loops = 40; // 40*50ms makes 2 seconds
+    int count = 0;
+    int trigger_on;
+    int expect_after_trigger;
+    if (rising) {
+        trigger_on = LOW;
+        expect_after_trigger = HIGH;
+    } else {
+        trigger_on = HIGH;
+        expect_after_trigger = LOW;
+    }
+
+    if (digitalRead(pin) == trigger_on) {
         delay(50);
         // Wait for High
-        // FIXME: Possibly a timeout?
-        while (digitalRead(pin) != HIGH) {
+        while (digitalRead(pin) != expect_after_trigger && count < max_loops) {
+            count++;
             delay(50);
         }
-        return true;
+
+        if (count == max_loops) {
+            // Timed out waiting for high
+            return false;
+        } else {
+            return true;
+        }
+
     }
     return false;
+}
+bool detectRisingEdge(int pin) {
+    return detectEdge(pin, true);
+}
+
+bool detectFallingEdge(int pin) {
+    return detectEdge(pin, false);
 }
 
 bool joySwitchRisingEdge() {
@@ -227,37 +252,11 @@ bool returnButtonRisingEdge() {
     return detectRisingEdge(RETURN_BUTTON_PIN);
 }
 
-/**
- * @brief Plays a sound in the buzzer
- * 
- * @param f Frequency of the tone
- * @param duration Time to play the tone in miliseconds
- */
-void playSound(int f, int duration) {
-    #ifndef SILENT_MODE
-    tone(BUZZER_PIN, f);
-    delay(duration);
-    noTone(BUZZER_PIN);
-    #endif
-}
-
-void playFalloutTheme() {
-    // Intro theme C D# E
-    playSound(523, 1000);
-    playSound(622, 2000);
-    playSound(659, 2000);
-}
-
-void playConfirmationBeep() {
-    playSound(700, 200);
-}
-
-void playReturnBeep() {
-    playSound(500, 200);
-}
-
 void setup() {
-    Serial.begin(115200); // For debug purposes
+    #ifdef DEBUG_MODE
+    Serial.begin(115200);
+    #endif
+
     // Setup Home screen
     context = CTX_HOME_SCREEN;
 
@@ -294,7 +293,7 @@ void setup() {
     setDefaultTFTScheme();
     clearTFTScreen();
     // Why not. Adds an extra 5 seconds to the boot up though, will change it to a simple beep when I get bored of it
-    playFalloutTheme();
+    playStartupBeep();
     tftScreen.println("    Jack of");
     tftScreen.println(" All Sensors");
     displayHomeSelectionMenu(currentMenuSelection, menuOptions, numOpts);

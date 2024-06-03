@@ -58,6 +58,7 @@ void displayRFIDReadMode(bool cardDetected, byte* uidBytes, int uidBytesSize, bo
         clearTFTScreenBelow(0, 2*TFT_DEFAULT_CHAR_H);
         tftScreen.textSize(TFT_CHAR_MULT);
         tftScreen.stroke(TFT_YELLOW);
+        tftScreen.setCursor(0,2*TFT_DEFAULT_CHAR_H);
         tftScreen.println("Standing by");
         setDefaultTFTScheme();
     }

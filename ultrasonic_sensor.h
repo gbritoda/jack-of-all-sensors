@@ -1,6 +1,6 @@
-#define TRIG_PIN 13
-#define ECHO_PIN 12
 #define SONAR_VCC_PIN 11
+#define TRIG_PIN 12
+#define ECHO_PIN 13
 
 
 /* Measure distance in cm using ultrasonic sensor */
